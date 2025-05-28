@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ftp="http://www.mulesoft.org/schema/mule/ftp"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/ftp http://www.mulesoft.org/schema/mule/ftp/current/mule-ftp.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="5416030a-a858-4548-b897-3f783244098f" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="c07b4815-bbbc-4b92-be58-274296d3f72f" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="Lemlem11!" database="userdata" />
+	</db:config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="6fcf623e-c5cf-4ad0-94d9-c72463aacdf9" >
+		<file:connection />
+	</file:config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="0f86e8b8-7f13-4189-ad39-7e25e78da63d" >
+		<http:request-connection host="jsonplaceholder.typicode.com" />
+	</http:request-config>
+	<flow name="tryscopeFlow" doc:id="7fc3c0ec-7170-4343-9c99-0a37b1c34b0d" >
+		<http:listener doc:name="Listener" doc:id="a4c79f95-77ac-4b73-a522-91d95c471e09" config-ref="HTTP_Listener_config" path="tryScope">
+			<http:response statusCode="#[vars.code]" />
+		</http:listener>
+		<try doc:name="Try" doc:id="8f2e1bb1-4eae-4e81-989c-aad8158ea67a" >
+			<db:select doc:name="Select Student Data" doc:id="dbed88ad-c94f-46d4-9473-965024d8cd99" config-ref="Database_Config">
+				<db:sql ><![CDATA[select * from students]]></db:sql>
+			</db:select>
+			<ee:transform doc:name="Transform to CSV" doc:id="4ee881c9-4925-49da-a794-07866c820882" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+---
+payload map {
+	phone: $.phone,
+	email: $.email,
+	title: $.title
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<flow-ref doc:name="studentCSV" doc:id="246838eb-fa38-4e6b-a668-511929ae9d2e" name="studentCSV" />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="ef0ecaf4-9f95-4bb5-b0f8-fbca24f97b9b" type="ANY">
+					<http:request method="GET" doc:name="Request" doc:id="ef1572ae-97c3-4b08-a867-948a09498c0f" config-ref="HTTP_Request_configuration" path="/users"/>
+					<ee:transform doc:name="Transform Message" doc:id="d98b0806-db75-4193-82f4-d10c8c881f02" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<flow-ref doc:name="studentCSV" doc:id="3289d031-1865-47ef-9c59-ed63115025de" name="studentCSV"/>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<logger level="INFO" doc:name="Logger" doc:id="c26b8ea4-723f-4b76-a66b-97eeae7f11d9" message="#[payload]"/>
+		<try doc:name="Try" doc:id="d3fff026-4277-44e9-9a43-c7607ccd6513" >
+			<file:read doc:name="Read" doc:id="c7662a04-6c34-4e3e-8dfa-0d50d0205652" config-ref="File_Config" path="C:\Users\ledet\OneDrive\Desktop\Important_MuleSoft_files\mule25\student.csv"/>
+			<ee:transform doc:name="Transform Message" doc:id="c088dcc2-8c87-4592-9f21-d9313ec2bb63" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<error-handler >
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="d290525e-bf8f-4d29-be5d-0f51889506cf" type="ANY">
+					<set-variable value="404" doc:name="Set Variable" doc:id="1af17478-a798-47fd-8c49-7c4f15b6258e" variableName="code"/>
+					<logger level="INFO" doc:name="Logger" doc:id="a8bfdf87-e113-49ab-8d4c-729c48e81bda" message='#[{message: "Bad Request"}]'/>
+				</on-error-propagate>
+			</error-handler>
+		</try>
+	</flow>
+	<sub-flow name="studentCSV" doc:id="03184829-6568-4fea-91ad-61085ac46754" >
+		<file:write doc:name="Write" doc:id="356deeb4-3516-4b3c-9c58-d0e593a16c0a" config-ref="File_Config" path="C:\Users\ledet\OneDrive\Desktop\Important_MuleSoft_files\mule25\student.csv"/>
+	</sub-flow>
+</mule>
